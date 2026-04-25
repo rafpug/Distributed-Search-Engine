@@ -1,0 +1,15 @@
+services:
+  coordinator:
+    image: rpc-coordinator:latest
+    build:
+      context: .
+      dockerfile: dockerfile.coordinator
+    container_name: rpc-coordinator
+    ports:
+      - "3002:3001"
+
+  worker-image:
+    image: rpc-worker:latest
+    build:
+      context: .
+      dockerfile: dockerfile.worker

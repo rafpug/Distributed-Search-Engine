@@ -1,0 +1,13 @@
+FROM golang:1.26
+
+WORKDIR /app
+
+COPY ./coordinator ./coordinator
+COPY ./types ./types
+COPY ./worker ./worker
+COPY ./go.mod ./go.mod
+
+WORKDIR /app/worker
+RUN go build -o worker
+
+ENTRYPOINT ["./worker"]
