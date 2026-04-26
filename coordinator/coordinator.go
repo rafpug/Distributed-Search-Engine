@@ -86,6 +86,8 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
         newMap := CreateMapTask(c, req.WorkerId)
 
         resp.TaskM = &newMap
+        fmt.Println("Successfully assigned map task from coord")
+        return nil
     }
     fmt.Println("SUCESSDOIHNE2")
     return nil
