@@ -13,7 +13,7 @@ const reduceCount = 4
 const mapCount = 15
 
 const B = 100
-const maxUrls = 1000
+const maxUrls = 10
 
 
 type CoordinatorAPI struct {
@@ -41,6 +41,10 @@ func CreateMapTask( c *CoordinatorAPI, workerId string) types.MapTask {
     }
     urls := c.urlQueue[:count]
     c.urlQueue = c.urlQueue[count:]
+
+    for _, url := range urls {
+        c.searchedURLS[url] = true
+    }
 
     intermFiles := []string{}
 
