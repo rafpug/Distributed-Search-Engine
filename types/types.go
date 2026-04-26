@@ -32,3 +32,21 @@ type MapDoneRequest struct {
 type MapDoneResponse struct {
 	Ok bool
 }
+
+type InitTransferRequest struct {
+	Address string
+	Filename string
+}
+
+type InitTransferResponse struct {
+	Ok bool
+}
+
+type RecieveTransferRequest struct {
+	Filename string
+	Data []byte
+}
+
+type RecieveTransferResponse struct {
+	Ok bool
+}

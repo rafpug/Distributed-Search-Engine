@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"net"
 	"net/http"
 	"net/rpc"
 	"net/url"
@@ -198,7 +199,7 @@ func appendIndex(filename string, index ReverseIndex) error {
 }
 
 
-type PeerAPI struct{}
+type WorkerAPI struct{}
 
 var myName string
 var reducerAllocs []string
@@ -213,28 +214,55 @@ func mrHash(key string, r int) int {
 	return int(h.Sum32() & 0x7fffffff) % r
 }
 
-// save incoming mappings to be reduced
-// func (p *PeerAPI) ReceiveBatch(args MapResultBatch, response *string) error {
-// 	incomingMu.Lock()
-// 	incomingReduceData[args.ReduceID] = append(incomingReduceData[args.ReduceID], args.Data...)
-// 	incomingMu.Unlock()
+/* Coordinator initiates a file transfer between workers */
+func (w *WorkerAPI) InitiateFileTransfer(req types.InitTransferRequest, resp *types.InitTransferResponse) error {
+	data, err := os.ReadFile(req.Filename)
+	if err != nil {
+		resp.Ok = false
+		return err
+	}
 
-// 	*response = "ok"
-// 	return nil
-// }
+	recieverReq := types.RecieveTransferRequest {
+		Filename: req.Filename,
+		Data: data,
+	}
+	recieverResp := types.RecieveTransferResponse{}
 
-// listen for incoming mappings to be reduced
-// func listenForPeerRPC() {
-// 	peer_api := new(PeerAPI)
-// 	rpc.Register(peer_api)
+	client, err := rpc.Dial("tcp", req.Address)
+	if err != nil {
+		resp.Ok = false
+		return err
+	}
+	defer client.Close()
 
-// 	listener, _ := net.Listen("tcp", ":2001")
+	err = client.Call("", recieverReq, &recieverResp)
+	resp.Ok = recieverResp.Ok
+	return err
+}
 
-// 	for {
-// 		conn, _ := listener.Accept()
-// 		go rpc.ServeConn(conn)
-// 	}
-// }
+/* Worker recieves and writes the file locally */
+func (w *WorkerAPI) RecieveFileTransfer(req types.RecieveTransferRequest, resp *types.RecieveTransferResponse) error {
+	err := os.WriteFile(req.Filename, req.Data, 0644)
+	if err != nil {
+		resp.Ok = false
+		return err
+	}
+	resp.Ok = true
+	return nil
+}
+
+// listen for incoming files that need to be replicated
+func listenForWorkerRPC() {
+	worker_api := new(WorkerAPI)
+	rpc.Register(worker_api)
+
+	listener, _ := net.Listen("tcp", ":2001")
+
+	for {
+		conn, _ := listener.Accept()
+		go rpc.ServeConn(conn)
+	}
+}
 
 
 func mapData(client *rpc.Client, resp types.TaskResponse) {
@@ -273,7 +301,7 @@ func mapData(client *rpc.Client, resp types.TaskResponse) {
 func main() {
 	myName = os.Args[1]
 
-	// go listenForPeerRPC()
+	go listenForWorkerRPC()
 
 	// time.Sleep(time.Second)
 	client, err := rpc.Dial("tcp", "coordinator:3001") 
