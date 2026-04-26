@@ -2,18 +2,19 @@ package main
 
 import (
 	"distributed_search_engine/types"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"net/http"
 	"net/rpc"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
-	"encoding/json"
-	"net/url"
-	"net/http"
-	"regexp"
-	"golang.org/x/net/html"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 type ReverseIndex map[string]map[string]bool
@@ -235,25 +236,6 @@ func mrHash(key string, r int) int {
 // 	}
 // }
 
-// Report Map Task Complete
-// func reportMapDone(jobNum int, client *rpc.Client) {
-// 	req := types.JobDoneRequest{
-// 		WorkerId: myName,
-// 		JobNum:   jobNum,
-// 	}
-// 	resp := ""
-// 	client.Call("CoordinatorAPI.ReportMapDone", req, &resp)
-// }
-
-// Report Reduce Task Complete
-// func reportReduceDone(jobNum int, client *rpc.Client) {
-// 	req := types.JobDoneRequest{
-// 		WorkerId: myName,
-// 		JobNum:   jobNum,
-// 	}
-// 	resp := ""
-// 	client.Call("CoordinatorAPI.ReportReduceDone", req, &resp)
-// }
 
 func mapData(client *rpc.Client, resp types.TaskResponse) {
 	result := make(map[string]bool) // resulting urls
