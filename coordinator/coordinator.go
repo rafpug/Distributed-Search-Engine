@@ -10,7 +10,6 @@ import (
 )
 
 const reduceCount = 4
-const mapCount = 15
 
 const B = 100
 const maxUrls = 100000
@@ -26,6 +25,9 @@ type CoordinatorAPI struct {
     /* Keeps a map of workers to their jobs for tracking completion */
     mapWorkers map[string][]types.MapTask
     pendingMapTasks int
+    pendingReduceTasks int
+
+    reduceQueue []int
 
     // mapTasks        []types.MapTask
     // reduceTasks     []types.ReduceTask
@@ -64,6 +66,50 @@ func CreateMapTask( c *CoordinatorAPI, workerId string) types.MapTask {
     return newMap
 }
 
+func CreateReduceTask(c *CoordinatorAPI, workerId string) types.ReduceTask {
+    reduceId := c.reduceQueue[0]
+    c.reduceQueue = c.reduceQueue[:1]
+
+    intermFiles := []string {}
+    for k, v := range c.mapWorkers {
+        if k == workerId {
+            fileName := v[0].IntermFiles[reduceId]
+            intermFiles = append(intermFiles, fileName)
+            continue
+        }
+        reducerAddress := fmt.Sprintf("rpc-%s:2001", workerId)
+
+        // fileName := fmt.Sprintf("%s-%d", k, reduceId)
+        fileName := v[0].IntermFiles[reduceId]
+        intermFiles = append(intermFiles, fileName)
+
+        address := fmt.Sprintf("rpc-%s:2001", k)
+
+        client, err := rpc.Dial("tcp", address)
+        if err != nil {
+            panic(err)
+        }
+        fileReq := types.InitTransferRequest{
+            Address: reducerAddress,
+            Filename: fileName,
+        }
+
+        fileResp := types.InitTransferResponse{}
+
+        err = client.Call("WorkerAPI.InitiateFileTransfer", fileReq, &fileResp)
+        if err != nil {
+            panic(err)
+        }
+
+        client.Close()
+    }
+    
+    newReduce := types.ReduceTask{
+        Files: intermFiles,
+    }
+    return newReduce
+}
+
 func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse) error {
     fmt.Println("New get job request")
     c.mu.Lock()
@@ -94,8 +140,24 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
         fmt.Println("Successfully assigned map task from coord")
         return nil
     }
-    // resp.Done = true
-    fmt.Println("SUCESSDOIHNE2")
+
+    /* Attempt to assign a reduce task */
+    for{
+        if len(c.reduceQueue) == 0 {
+            if c.pendingReduceTasks == 0 {
+                fmt.Println("SUCESSDOIHNE2")
+                resp.Done = true
+            }
+            c.mu.Unlock()
+            time.Sleep(10 * time.Millisecond)
+            c.mu.Lock()
+            break
+        }
+        /* Reduce task ready to be assigned */
+        c.pendingReduceTasks++
+        newReduce := CreateReduceTask(c, req.WorkerId)
+        resp.TaskR = &newReduce
+    }
     return nil
 }
 
@@ -118,26 +180,12 @@ func (c *CoordinatorAPI) ReportMapDone(req types.MapDoneRequest, resp *types.Map
     return nil
 }
 
-// func (c *CoordinatorAPI) ReportReduceDone(req types.JobDoneRequest, resp *string) error {
-//     c.mu.Lock()
-//     defer c.mu.Unlock()
-
-//     if req.JobNum >= 0 && req.JobNum < len(c.reduceDone) && !c.reduceDone[req.JobNum] {
-//         c.reduceDone[req.JobNum] = true
-//         c.reduceDoneCount++
-//     }
-
-//     *resp = "ok"
-//     return nil
-// }
-
-// func buildReduceTasks(count int) []types.ReduceTask {
-//     tasks := make([]types.ReduceTask, 0, count)
-//     for i := 0; i < count; i++ {
-//         tasks = append(tasks, types.ReduceTask{JobNum: i})
-//     }
-//     return tasks
-// }
+func (c *CoordinatorAPI) ReportReduceDone(req types.ReduceDoneRequest, resp *types.ReduceDoneResponse) error {
+    c.pendingReduceTasks--
+    fmt.Printf("%s: finished their reduce step", req.WorkerId)
+    /* Initiate replication of output files here */
+    return nil
+}
 
 func main() {
     fmt.Printf("HelloWorld\n")
@@ -145,6 +193,7 @@ func main() {
     // reduceTasks := buildReduceTasks(reduceCount)
     coordAPI := &CoordinatorAPI{
         pendingMapTasks: 0,
+        pendingReduceTasks: 0,
         searchedURLS: make(map[string]bool, 0),
         urlQueue: []string{
             "https://en.wiktionary.org/wiki/Wiktionary:Main_Page",
@@ -156,11 +205,11 @@ func main() {
             "https://www.npr.org/",
         },
         mapWorkers: make(map[string][]types.MapTask),
-        
+        reduceQueue: make([]int, 0),
+    }
 
-        // reduceTasks:    reduceTasks,
-        // reduceAssigned: make([]bool, len(reduceTasks)),
-        // reduceDone:     make([]bool, len(reduceTasks)),
+    for i := 0; i < reduceCount; i++ {
+        coordAPI.reduceQueue[i] = i
     }
 
     rpc.Register(coordAPI)

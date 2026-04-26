@@ -11,7 +11,9 @@ type MapTask struct {
 }
 
 type ReduceTask struct {
-	Files map[string][]string // Maps intermediate files to worker addresses
+	/* List of intermediate files that should have been replicated over */
+	Files []string
+
 }
 
 type TaskResponse struct {
@@ -20,16 +22,19 @@ type TaskResponse struct {
 	Done bool
 }
 
-type BatchDoneRequest struct {
-	WorkerId string
-	JobNum int
-}
-
 type MapDoneRequest struct {
 	Urls map[string]bool
 }
 
 type MapDoneResponse struct {
+	Ok bool
+}
+
+type ReduceDoneRequest struct {
+	WorkerId string
+}
+
+type ReduceDoneResponse struct {
 	Ok bool
 }
 

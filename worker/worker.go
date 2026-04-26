@@ -12,7 +12,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/net/html"
@@ -201,12 +200,6 @@ func appendIndex(filename string, index ReverseIndex) error {
 
 type WorkerAPI struct{}
 
-var myName string
-var reducerAllocs []string
-var incomingMu sync.Mutex
-var sentBatches = make(map[int]int)
-var sentBatchesMu sync.Mutex
-
 /* Distributes the given key words across the intermediate files */
 func mrHash(key string, r int) int {
 	h := fnv.New32a()
@@ -235,7 +228,7 @@ func (w *WorkerAPI) InitiateFileTransfer(req types.InitTransferRequest, resp *ty
 	}
 	defer client.Close()
 
-	err = client.Call("", recieverReq, &recieverResp)
+	err = client.Call("WorkerAPI.RecieveFileTransfer", recieverReq, &recieverResp)
 	resp.Ok = recieverResp.Ok
 	return err
 }
@@ -264,9 +257,12 @@ func listenForWorkerRPC() {
 	}
 }
 
+func reduceData(client *rpc.Client, resp *types.ReduceTask) {
+	
+}
 
 func mapData(client *rpc.Client, resp types.TaskResponse) {
-	result := make(map[string]bool) // resulting urls
+	result := make(map[string]bool) // stores new resulting urls
 	indexes := make([]ReverseIndex, resp.TaskM.R)
 
 	for i := range indexes{
@@ -299,7 +295,7 @@ func mapData(client *rpc.Client, resp types.TaskResponse) {
 }
 
 func main() {
-	myName = os.Args[1]
+	myName := os.Args[1]
 
 	go listenForWorkerRPC()
 
@@ -328,6 +324,8 @@ func main() {
 			mapData(client, resp)
 
 		case resp.TaskR != nil:
+			fmt.Println("Successfully got a reduce task")
+			reduceData(client, resp.TaskR)
 			// reduceData(resp.TaskR.JobNum)
 			// reportReduceDone(resp.TaskR.JobNum, client)
 
