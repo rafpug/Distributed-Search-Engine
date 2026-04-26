@@ -68,7 +68,7 @@ func CreateMapTask( c *CoordinatorAPI, workerId string) types.MapTask {
 
 func CreateReduceTask(c *CoordinatorAPI, workerId string) types.ReduceTask {
     reduceId := c.reduceQueue[0]
-    c.reduceQueue = c.reduceQueue[:1]
+    c.reduceQueue = c.reduceQueue[1:]
 
     intermFiles := []string {}
     for k, v := range c.mapWorkers {
@@ -147,7 +147,7 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
         if len(c.reduceQueue) == 0 {
             if c.pendingReduceTasks == 0 {
                 fmt.Println("SUCESSDOIHNE2")
-                resp.Done = true
+                // resp.Done = true
             }
             c.mu.Unlock()
             time.Sleep(10 * time.Millisecond)
@@ -158,6 +158,8 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
         c.pendingReduceTasks++
         newReduce := CreateReduceTask(c, req.WorkerId)
         resp.TaskR = &newReduce
+        fmt.Println("successfully assigned reduce task from coord")
+        return nil
     }
     return nil
 }
@@ -210,7 +212,7 @@ func main() {
     }
 
     for i := 0; i < reduceCount; i++ {
-        coordAPI.reduceQueue[i] = i
+        coordAPI.reduceQueue = append(coordAPI.reduceQueue, i)
     }
 
     rpc.Register(coordAPI)
