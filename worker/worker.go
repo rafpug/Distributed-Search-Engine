@@ -262,7 +262,7 @@ func mapData(client *rpc.Client, resp types.TaskResponse) {
 	doneReq := types.MapDoneRequest{
 		Urls: result,
 	}
-	doneResp := types.TaskResponse{}
+	doneResp := types.MapDoneResponse{}
 	
 	err := client.Call("CoordinatorAPI.ReportMapDone", doneReq, &doneResp)
 	if err != nil {

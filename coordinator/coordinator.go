@@ -40,8 +40,9 @@ func CreateMapTask( c *CoordinatorAPI, workerId string) types.MapTask {
         count = len(c.urlQueue)
     }
     urls := c.urlQueue[:count]
+    c.urlQueue = c.urlQueue[count:]
 
-    intermFiles := make([]string, reduceCount)
+    intermFiles := []string{}
 
     for i := 0; i < reduceCount; i++ {
         s := fmt.Sprintf("%s-%d", workerId, i)
