@@ -257,8 +257,33 @@ func listenForWorkerRPC() {
 	}
 }
 
-func reduceData(client *rpc.Client, resp *types.ReduceTask) {
-	
+func reduceData(resp *types.ReduceTask) {
+	interm_outputs := []ReverseIndex{}
+	for _, file := range resp.Files{
+		index, err := loadIndex(file)
+		if err != nil {
+			panic(err)
+		}
+
+		interm_outputs = append(interm_outputs, index)
+	}
+	output := combineIndex(interm_outputs)
+	fileName := fmt.Sprintf("output-%d", resp.ReduceId)
+	saveIndex(fileName, output)
+}
+
+func reduceDone(client *rpc.Client, workerId string) {
+	doneReq := types.ReduceDoneRequest{
+		WorkerId: workerId,
+	}
+	doneResp := types.ReduceDoneResponse{
+		Ok: true,
+	}
+
+	err := client.Call("CoordinatorAPI.ReportReduceDone", doneReq, &doneResp)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func mapData(client *rpc.Client, resp types.TaskResponse) {
@@ -325,9 +350,8 @@ func main() {
 
 		case resp.TaskR != nil:
 			fmt.Println("Successfully got a reduce task")
-			reduceData(client, resp.TaskR)
-			// reduceData(resp.TaskR.JobNum)
-			// reportReduceDone(resp.TaskR.JobNum, client)
+			reduceData(resp.TaskR)
+			reduceDone(client, myName)
 
 		case resp.Done:
 			fmt.Println("Shutting down!")

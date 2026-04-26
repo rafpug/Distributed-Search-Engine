@@ -106,6 +106,7 @@ func CreateReduceTask(c *CoordinatorAPI, workerId string) types.ReduceTask {
     
     newReduce := types.ReduceTask{
         Files: intermFiles,
+        ReduceId: reduceId,
     }
     return newReduce
 }

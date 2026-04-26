@@ -13,6 +13,7 @@ type MapTask struct {
 type ReduceTask struct {
 	/* List of intermediate files that should have been replicated over */
 	Files []string
+	ReduceId int
 
 }
 
