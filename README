@@ -1,5 +1,8 @@
 This is a docker based implementation of map-reduce with rpc's
 
+To resolve dependencies:
+go mod tidy
+
 To run:
 docker compose build --no-cache
 docker compose up -d coordinator
@@ -7,3 +10,4 @@ go run .
 
 To cleanup:
 docker compose down
+ docker rm -f $(docker ps -aq --filter "name=rpc-worker")

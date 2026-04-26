@@ -13,6 +13,7 @@ const reduceCount = 4
 const mapCount = 15
 
 const B = 100
+const maxUrls = 1000
 
 
 type CoordinatorAPI struct {
@@ -59,6 +60,7 @@ func CreateMapTask( c *CoordinatorAPI, workerId string) types.MapTask {
 }
 
 func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse) error {
+    fmt.Println("New get job request")
     c.mu.Lock()
     defer c.mu.Unlock()
 
@@ -68,7 +70,7 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
 
     /* First attempt to assign a map task */
     for{
-        if len(c.urlQueue) == 0 {
+        if len(c.urlQueue) == 0 || len(c.searchedURLS) >= maxUrls {
             if c.pendingMapTasks == 0 {
                 /* No more map tasks */
                 break
@@ -85,15 +87,13 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
 
         resp.TaskM = &newMap
     }
-
+    fmt.Println("SUCESSDOIHNE2")
     return nil
 }
 
 func (c *CoordinatorAPI) ReportMapDone(req types.MapDoneRequest, resp *types.MapDoneResponse) error {
     c.mu.Lock()
     defer c.mu.Unlock()
-
-    c.pendingMapTasks--
 
     for k := range req.Urls {
         if c.searchedURLS[k] {
@@ -102,6 +102,8 @@ func (c *CoordinatorAPI) ReportMapDone(req types.MapDoneRequest, resp *types.Map
             c.urlQueue = append(c.urlQueue, k)
         }
     }
+
+    c.pendingMapTasks--
 
     resp.Ok = true
     return nil
@@ -135,7 +137,9 @@ func main() {
     coordAPI := &CoordinatorAPI{
         pendingMapTasks: 0,
         searchedURLS: make(map[string]bool, 0),
-        urlQueue: []string{},
+        urlQueue: []string{
+            "https://en.wiktionary.org/wiki/Wiktionary:Main_Page",
+        },
         mapWorkers: make(map[string][]types.MapTask),
         
 

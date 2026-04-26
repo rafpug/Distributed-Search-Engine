@@ -276,13 +276,13 @@ func main() {
 	// go listenForPeerRPC()
 
 	// time.Sleep(time.Second)
-
 	client, err := rpc.Dial("tcp", "coordinator:3001") 
 	if err != nil {
 		panic(err)
 	}
 
 	for {
+		fmt.Println("Attempting to call coordinator again!")
 		req := types.TaskRequest{
 			WorkerId: myName,
 		}
@@ -296,6 +296,7 @@ func main() {
 
 		switch {
 		case resp.TaskM != nil:
+			fmt.Println("Successfully got a map task")
 			mapData(client, resp)
 
 		case resp.TaskR != nil:

@@ -6,6 +6,7 @@ COPY ./coordinator ./coordinator
 COPY ./types ./types
 COPY ./worker ./worker
 COPY ./go.mod ./go.mod
+COPY ./go.sum ./go.sum
 
 WORKDIR /app/worker
 RUN go build -o worker
