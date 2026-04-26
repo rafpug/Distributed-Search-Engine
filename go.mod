@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.6.0
+	golang.org/x/net v0.52.0
 )
 
 require (

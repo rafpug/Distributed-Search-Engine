@@ -11,8 +11,11 @@ import (
 	"github.com/docker/go-connections/nat"
 )
 
+var n = 4
+
 func main() {
-	if err := spawnWorkers(4); err != nil {
+	err := spawnWorkers(n)
+	if err != nil {
 		log.Fatal(err)
 	}
 }

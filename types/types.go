@@ -2,17 +2,16 @@ package types
 
 type TaskRequest struct {
 	WorkerId string
-	Files []int
 }
 
 type MapTask struct {
-	JobNum int
-	InputFile string
-	R int
+	R int // Number of reduce tasks
+	Urls []string // Batch of URLs to crawl
+	IntermFiles []string // Names of expected intermediate files
 }
 
 type ReduceTask struct {
-	JobNum int
+	Files map[string][]string // Maps intermediate files to worker addresses
 }
 
 type TaskResponse struct {
@@ -21,7 +20,15 @@ type TaskResponse struct {
 	Done bool
 }
 
-type JobDoneRequest struct {
+type BatchDoneRequest struct {
 	WorkerId string
 	JobNum int
+}
+
+type MapDoneRequest struct {
+	Urls map[string]bool
+}
+
+type MapDoneResponse struct {
+	Ok bool
 }
