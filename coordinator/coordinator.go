@@ -13,7 +13,7 @@ const reduceCount = 4
 const mapCount = 15
 
 const B = 100
-const maxUrls = 10
+const maxUrls = 100000
 
 
 type CoordinatorAPI struct {
@@ -94,6 +94,7 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
         fmt.Println("Successfully assigned map task from coord")
         return nil
     }
+    // resp.Done = true
     fmt.Println("SUCESSDOIHNE2")
     return nil
 }
@@ -107,6 +108,7 @@ func (c *CoordinatorAPI) ReportMapDone(req types.MapDoneRequest, resp *types.Map
             continue
         } else {
             c.urlQueue = append(c.urlQueue, k)
+            c.searchedURLS[k] = true
         }
     }
 
@@ -146,6 +148,12 @@ func main() {
         searchedURLS: make(map[string]bool, 0),
         urlQueue: []string{
             "https://en.wiktionary.org/wiki/Wiktionary:Main_Page",
+            "https://en.wikipedia.org/wiki/Main_Page",
+            "https://www.calpoly.edu/",
+            "https://www.bbc.com/",
+            "https://www.usa.gov/",
+            "https://dmoztools.net/",
+            "https://www.npr.org/",
         },
         mapWorkers: make(map[string][]types.MapTask),
         

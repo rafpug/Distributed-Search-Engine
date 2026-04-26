@@ -51,7 +51,7 @@ func spawnWorkers(n int) error {
 			},
 			&container.HostConfig{
 				NetworkMode: "distributed-web-crawler_default",
-				// AutoRemove: true,
+				AutoRemove: true,
 				PortBindings: nat.PortMap{
 					containerPort: []nat.PortBinding{
 						{
