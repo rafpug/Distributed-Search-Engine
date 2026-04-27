@@ -17,6 +17,8 @@ import (
 	"golang.org/x/net/html"
 )
 
+const heartbeatTime = 10 * time.Second
+
 type ReverseIndex map[string]map[string]bool
 
 var stopWords = map[string]bool {
@@ -319,6 +321,20 @@ func mapData(client *rpc.Client, resp types.TaskResponse) {
 	} 	
 }
 
+func generateHeartbeats(client *rpc.Client, workerId string){
+	for {
+		req := types.HeartbeatRequest{
+			WorkerId: workerId,
+		}
+		resp := types.HeartbeatResponse{}
+		err := client.Call("CoordinatorAPI.RecieveHeartbeat", req, &resp)
+		if err != nil {
+			panic(err)
+		}
+		time.Sleep(heartbeatTime)
+	}
+}
+
 func main() {
 	myName := os.Args[1]
 
@@ -329,6 +345,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	go generateHeartbeats(client, myName)
 
 	for {
 		fmt.Println("Attempting to call coordinator again!")

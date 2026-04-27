@@ -188,21 +188,40 @@ func (c *CoordinatorAPI) ReportMapDone(req types.MapDoneRequest, resp *types.Map
 }
 
 func (c *CoordinatorAPI) ReportReduceDone(req types.ReduceDoneRequest, resp *types.ReduceDoneResponse) error {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    
     c.pendingReduceTasks--
     fmt.Printf("%s: finished their reduce step", req.WorkerId)
     /* Initiate replication of output files here */
     return nil
 }
 
-func (c *CoordinatorAPI) Heartbeat(req types.HeartbeatRequest, resp *types.HeartbeatResponse) error {
+func (c *CoordinatorAPI) RedoMapTasks(workerId string) {
+    mapTasks := c.mapWorkers[workerId]
+
+    for _, task := range mapTasks{
+        for _, url := range task.Urls{
+            delete(c.searchedURLS, url)
+            
+        }
+    }
+}
+
+func (c *CoordinatorAPI) RecieveHeartbeat(req types.HeartbeatRequest, resp *types.HeartbeatResponse) error {
+    c.mu.Lock()
     curTime := time.Now()
     c.heartbeatStamp[req.WorkerId] = curTime
+    c.mu.Unlock()
 
     time.AfterFunc(heartbeatExpire, func() {
-        heartbeatAge := time.Since(curTime)
+        c.mu.Lock()
+        heartbeatAge := time.Since(c.heartbeatStamp[req.WorkerId])
         if heartbeatAge >= heartbeatExpire {
             /* worker is dead */
+            c.RedoMapTasks(req.WorkerId)
         }
+        c.mu.Unlock()
     })
 
     resp.Ok = true
