@@ -203,7 +203,7 @@ func (c *CoordinatorAPI) RedoMapTasks(workerId string) {
     for _, task := range mapTasks{
         for _, url := range task.Urls{
             delete(c.searchedURLS, url)
-            
+            c.urlQueue = append([]string{url}, c.urlQueue...)
         }
     }
 }
