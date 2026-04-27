@@ -56,3 +56,11 @@ type RecieveTransferRequest struct {
 type RecieveTransferResponse struct {
 	Ok bool
 }
+
+type HeartbeatRequest struct {
+	WorkerId string
+}
+
+type HeartbeatResponse struct {
+	Ok bool
+}

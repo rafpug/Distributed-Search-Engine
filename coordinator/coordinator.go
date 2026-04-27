@@ -14,6 +14,9 @@ const reduceCount = 4
 const B = 100
 const maxUrls = 100000
 
+/* Amount of seconds until a worker is considered dead */
+const heartbeatExpire = 20 * time.Second
+
 
 type CoordinatorAPI struct {
     mu sync.Mutex
@@ -28,6 +31,9 @@ type CoordinatorAPI struct {
     pendingReduceTasks int
 
     reduceQueue []int
+
+    /* Maps workers to the timestamp of their last heartbeat */
+    heartbeatStamp map[string]time.Time
 
     // mapTasks        []types.MapTask
     // reduceTasks     []types.ReduceTask
@@ -143,23 +149,21 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
     }
 
     /* Attempt to assign a reduce task */
-    for{
-        if len(c.reduceQueue) == 0 {
-            if c.pendingReduceTasks == 0 {
-                fmt.Println("SUCESSDOIHNE2")
-                // resp.Done = true
-            }
-            c.mu.Unlock()
-            time.Sleep(10 * time.Millisecond)
-            c.mu.Lock()
-            break
+    if len(c.reduceQueue) == 0 {
+        if c.pendingReduceTasks == 0 {
+            fmt.Println("SUCCESS")
+            // resp.Done = true
         }
+        c.mu.Unlock()
+        time.Sleep(10 * time.Millisecond)
+        c.mu.Lock()
+    
+    } else {
         /* Reduce task ready to be assigned */
         c.pendingReduceTasks++
         newReduce := CreateReduceTask(c, req.WorkerId)
         resp.TaskR = &newReduce
         fmt.Println("successfully assigned reduce task from coord")
-        return nil
     }
     return nil
 }
@@ -190,6 +194,21 @@ func (c *CoordinatorAPI) ReportReduceDone(req types.ReduceDoneRequest, resp *typ
     return nil
 }
 
+func (c *CoordinatorAPI) Heartbeat(req types.HeartbeatRequest, resp *types.HeartbeatResponse) error {
+    curTime := time.Now()
+    c.heartbeatStamp[req.WorkerId] = curTime
+
+    time.AfterFunc(heartbeatExpire, func() {
+        heartbeatAge := time.Since(curTime)
+        if heartbeatAge >= heartbeatExpire {
+            /* worker is dead */
+        }
+    })
+
+    resp.Ok = true
+    return nil
+}
+
 func main() {
     fmt.Printf("HelloWorld\n")
 
@@ -209,6 +228,7 @@ func main() {
         },
         mapWorkers: make(map[string][]types.MapTask),
         reduceQueue: make([]int, 0),
+        heartbeatStamp: make(map[string]time.Time),
     }
 
     for i := 0; i < reduceCount; i++ {

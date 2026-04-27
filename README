@@ -10,4 +10,6 @@ go run .
 
 To cleanup:
 docker compose down
+
+*if you don't have the docker desktop, you can forcefully close and clear the containers with this
  docker rm -f $(docker ps -aq --filter "name=rpc-worker")
