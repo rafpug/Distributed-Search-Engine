@@ -304,7 +304,7 @@ func mapData(client *rpc.Client, resp types.TaskResponse) {
 	for _, v := range urls {
 		err := fetch(v, indexes, result)
 		if err != nil {
-			fmt.Println("URL: ", v, " ", err)
+			// fmt.Println("URL: ", v, " ", err)
 		}
 	}
 
@@ -351,7 +351,6 @@ func main() {
 	go generateHeartbeats(client, myName)
 
 	for {
-		fmt.Println("Attempting to call coordinator again!")
 		req := types.TaskRequest{
 			WorkerId: myName,
 		}
@@ -365,11 +364,9 @@ func main() {
 
 		switch {
 		case resp.TaskM != nil:
-			fmt.Println("Successfully got a map task")
 			mapData(client, resp)
 
 		case resp.TaskR != nil:
-			fmt.Println("Successfully got a reduce task")
 			reduceData(resp.TaskR)
 			reduceDone(client, myName, resp.TaskR.ReduceId)
 

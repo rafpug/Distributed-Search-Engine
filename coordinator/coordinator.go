@@ -102,7 +102,6 @@ func CreateReduceTask(c *CoordinatorAPI, workerId string) (*types.ReduceTask, er
 }
 
 func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse) error {
-    fmt.Println("New get job request")
     c.mu.Lock()
     defer c.mu.Unlock()
 
@@ -128,7 +127,7 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
         newMap := CreateMapTask(c, req.WorkerId)
 
         resp.TaskM = &newMap
-        fmt.Println("Successfully assigned map task from coord")
+        fmt.Printf("ASSIGN MAP TASK TO %s\n", req.WorkerId)
         return nil
     }
 
@@ -154,7 +153,7 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
         c.pendingReduceTasks++
 
         resp.TaskR = newReduce
-        fmt.Println("successfully assigned reduce task from coord")
+        fmt.Printf("ASSIGN REDUCE TASK TO %s\n", req.WorkerId)
     }
     return nil
 }
@@ -173,7 +172,7 @@ func (c *CoordinatorAPI) ReportMapDone(req types.MapDoneRequest, resp *types.Map
     }
 
     c.pendingMapTasks--
-
+    fmt.Printf("GET MAP TASK RESULT\n")
     resp.Ok = true
     return nil
 }
@@ -233,6 +232,7 @@ func (c *CoordinatorAPI) InitiateReplicas(workerId string, outputFile string) {
             continue
         }
 
+        fmt.Printf("REPLICATE %s ON %s TO %s\n", outputFile, workerId, worker)
         c.replicaTracker[worker] = append(c.replicaTracker[worker], outputFile)
         neededReplicas--
     }
@@ -264,7 +264,7 @@ func (c *CoordinatorAPI) RedoMapTasks(workerId string) {
 
 func (c *CoordinatorAPI) ReReplicateOutputs(workerId string) {
     outputs := c.replicaTracker[workerId]
-
+    
     for _, output := range outputs {
         workers := c.SortWorkersByLeastReplications()
         for _, worker := range workers {
@@ -291,6 +291,7 @@ func (c *CoordinatorAPI) ReReplicateOutputs(workerId string) {
                 continue
             } else {
                 c.replicaTracker[worker] = append(c.replicaTracker[worker], output)
+                fmt.Printf("REPLICATE %s ON %s TO %s\n", output, workerId, worker)
                 break
             }
         }
@@ -305,15 +306,22 @@ func (c *CoordinatorAPI) RecieveHeartbeat(req types.HeartbeatRequest, resp *type
     c.heartbeatStamp[req.WorkerId] = curTime
     c.mu.Unlock()
 
+    workerId := req.WorkerId
+
     time.AfterFunc(heartbeatExpire, func() {
-        c.mu.Lock()
-        heartbeatAge := time.Since(c.heartbeatStamp[req.WorkerId])
-        if heartbeatAge >= heartbeatExpire {
-            /* worker is dead */
-            c.RedoMapTasks(req.WorkerId)
-            c.ReReplicateOutputs(req.WorkerId)
+        ts, ok := c.heartbeatStamp[workerId]
+
+        if ok {
+            heartbeatAge := time.Since(ts)
+            if heartbeatAge >= heartbeatExpire {
+                /* worker is dead */
+                fmt.Printf("HEARTBEAT FAILED FROM %s\n", workerId)
+                c.RedoMapTasks(workerId)
+                fmt.Println("Finished redoing maptasks")
+                c.ReReplicateOutputs(workerId)
+                fmt.Println("Finished rereplicating")
+            }
         }
-        c.mu.Unlock()
     })
 
     resp.Ok = true
@@ -322,9 +330,6 @@ func (c *CoordinatorAPI) RecieveHeartbeat(req types.HeartbeatRequest, resp *type
 }
 
 func main() {
-    fmt.Printf("HelloWorld\n")
-
-    // reduceTasks := buildReduceTasks(reduceCount)
     coordAPI := &CoordinatorAPI{
         pendingMapTasks: 0,
         pendingReduceTasks: 0,
