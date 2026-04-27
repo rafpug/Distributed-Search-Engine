@@ -72,7 +72,7 @@ func CreateMapTask( c *CoordinatorAPI, workerId string) types.MapTask {
     return newMap
 }
 
-func CreateReduceTask(c *CoordinatorAPI, workerId string) types.ReduceTask {
+func CreateReduceTask(c *CoordinatorAPI, workerId string) (*types.ReduceTask, error) {
     reduceId := c.reduceQueue[0]
     c.reduceQueue = c.reduceQueue[1:]
 
@@ -93,7 +93,7 @@ func CreateReduceTask(c *CoordinatorAPI, workerId string) types.ReduceTask {
 
         client, err := rpc.Dial("tcp", address)
         if err != nil {
-            panic(err)
+            return nil, err
         }
         fileReq := types.InitTransferRequest{
             Address: reducerAddress,
@@ -104,7 +104,7 @@ func CreateReduceTask(c *CoordinatorAPI, workerId string) types.ReduceTask {
 
         err = client.Call("WorkerAPI.InitiateFileTransfer", fileReq, &fileResp)
         if err != nil {
-            panic(err)
+            return nil, err
         }
 
         client.Close()
@@ -114,7 +114,7 @@ func CreateReduceTask(c *CoordinatorAPI, workerId string) types.ReduceTask {
         Files: intermFiles,
         ReduceId: reduceId,
     }
-    return newReduce
+    return &newReduce, nil
 }
 
 func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse) error {
@@ -160,9 +160,14 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
     
     } else {
         /* Reduce task ready to be assigned */
+        newReduce, err := CreateReduceTask(c, req.WorkerId)
+        if err != nil {
+            /* The file transfer to the reducing worker failed
+                So we give up to let a different worker reattempt */
+            return nil
+        }
         c.pendingReduceTasks++
-        newReduce := CreateReduceTask(c, req.WorkerId)
-        resp.TaskR = &newReduce
+        resp.TaskR = newReduce
         fmt.Println("successfully assigned reduce task from coord")
     }
     return nil
