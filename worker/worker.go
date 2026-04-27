@@ -274,9 +274,11 @@ func reduceData(resp *types.ReduceTask) {
 	saveIndex(fileName, output)
 }
 
-func reduceDone(client *rpc.Client, workerId string) {
+func reduceDone(client *rpc.Client, workerId string, outId int) {
+	outFile := fmt.Sprintf("output-%d", outId)
 	doneReq := types.ReduceDoneRequest{
 		WorkerId: workerId,
+		OutputFile: outFile,
 	}
 	doneResp := types.ReduceDoneResponse{
 		Ok: true,
@@ -369,7 +371,7 @@ func main() {
 		case resp.TaskR != nil:
 			fmt.Println("Successfully got a reduce task")
 			reduceData(resp.TaskR)
-			reduceDone(client, myName)
+			reduceDone(client, myName, resp.TaskR.ReduceId)
 
 		case resp.Done:
 			fmt.Println("Shutting down!")

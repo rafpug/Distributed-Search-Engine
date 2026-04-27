@@ -135,7 +135,7 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
     /* Attempt to assign a reduce task */
     if len(c.reduceQueue) == 0 {
         if c.pendingReduceTasks == 0 {
-            fmt.Println("SUCCESS")
+            // fmt.Println("SUCCESS")
             // resp.Done = true
         }
         c.mu.Unlock()
@@ -199,9 +199,9 @@ func initTransfer(sender string, reciever string, file string) error {
         return err
     }
 
-    reducerAddress := fmt.Sprintf("rpc-%s:2001", reciever)
+    recieverAddress := fmt.Sprintf("rpc-%s:2001", reciever)
     fileReq := types.InitTransferRequest{
-        Address: reducerAddress,
+        Address: recieverAddress,
         Filename: file,
     }
 
@@ -245,7 +245,7 @@ func (c *CoordinatorAPI) ReportReduceDone(req types.ReduceDoneRequest, resp *typ
     c.InitiateReplicas(req.WorkerId, req.OutputFile)
     
     c.pendingReduceTasks--
-    fmt.Printf("%s: finished their reduce step", req.WorkerId)
+    fmt.Printf("%s: finished their reduce step\n", req.WorkerId)
     return nil
 }
 
@@ -317,6 +317,7 @@ func (c *CoordinatorAPI) RecieveHeartbeat(req types.HeartbeatRequest, resp *type
     })
 
     resp.Ok = true
+    fmt.Printf("Recieved Heartbeat from: %s\n", req.WorkerId)
     return nil
 }
 
