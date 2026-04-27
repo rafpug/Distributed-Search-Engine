@@ -72,7 +72,6 @@ func CreateMapTask( c *CoordinatorAPI, workerId string) types.MapTask {
 
 func CreateReduceTask(c *CoordinatorAPI, workerId string) (*types.ReduceTask, error) {
     reduceId := c.reduceQueue[0]
-    c.reduceQueue = c.reduceQueue[1:]
 
     intermFiles := []string {}
     for k, v := range c.mapWorkers {
@@ -86,16 +85,19 @@ func CreateReduceTask(c *CoordinatorAPI, workerId string) (*types.ReduceTask, er
         fileName := v[0].IntermFiles[reduceId]
         intermFiles = append(intermFiles, fileName)
 
-        err := initTransfer(workerId, k, fileName)
+        err := initTransfer(k, workerId, fileName)
         if err != nil {
             return nil, err
         }
+        
     }
     
     newReduce := types.ReduceTask{
         Files: intermFiles,
         ReduceId: reduceId,
     }
+
+    c.reduceQueue = c.reduceQueue[1:]
     return &newReduce, nil
 }
 
@@ -231,8 +233,8 @@ func (c *CoordinatorAPI) InitiateReplicas(workerId string, outputFile string) {
             continue
         }
 
+        c.replicaTracker[worker] = append(c.replicaTracker[worker], outputFile)
         neededReplicas--
-
     }
 }
 
@@ -288,11 +290,12 @@ func (c *CoordinatorAPI) ReReplicateOutputs(workerId string) {
             if err != nil {
                 continue
             } else {
+                c.replicaTracker[worker] = append(c.replicaTracker[worker], output)
                 break
             }
         }
     }
-    
+
     delete(c.replicaTracker, workerId)
 }
 
