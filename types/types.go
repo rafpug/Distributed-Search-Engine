@@ -33,6 +33,7 @@ type MapDoneResponse struct {
 
 type ReduceDoneRequest struct {
 	WorkerId string
+	OutputFile string
 }
 
 type ReduceDoneResponse struct {

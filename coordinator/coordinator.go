@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/rpc"
+	"sort"
 	"sync"
 	"time"
 )
@@ -17,13 +18,13 @@ const maxUrls = 100000
 /* Amount of seconds until a worker is considered dead */
 const heartbeatExpire = 20 * time.Second
 
+const replicaNum = 3
 
 type CoordinatorAPI struct {
     mu sync.Mutex
 
     searchedURLS    map[string]bool
     urlQueue []string
-    // mapQueue []types.TaskResponse
 
     /* Keeps a map of workers to their jobs for tracking completion */
     mapWorkers map[string][]types.MapTask
@@ -35,11 +36,8 @@ type CoordinatorAPI struct {
     /* Maps workers to the timestamp of their last heartbeat */
     heartbeatStamp map[string]time.Time
 
-    // mapTasks        []types.MapTask
-    // reduceTasks     []types.ReduceTask
-    // mapAssigned     []bool
-    // reduceAssigned  []bool
-    // reduceDone      []bool
+    /* Maps workers to their currently owned replicas */
+    replicaTracker map[string][]string
 }
 
 func CreateMapTask( c *CoordinatorAPI, workerId string) types.MapTask {
@@ -83,31 +81,15 @@ func CreateReduceTask(c *CoordinatorAPI, workerId string) (*types.ReduceTask, er
             intermFiles = append(intermFiles, fileName)
             continue
         }
-        reducerAddress := fmt.Sprintf("rpc-%s:2001", workerId)
 
         // fileName := fmt.Sprintf("%s-%d", k, reduceId)
         fileName := v[0].IntermFiles[reduceId]
         intermFiles = append(intermFiles, fileName)
 
-        address := fmt.Sprintf("rpc-%s:2001", k)
-
-        client, err := rpc.Dial("tcp", address)
+        err := initTransfer(workerId, k, fileName)
         if err != nil {
             return nil, err
         }
-        fileReq := types.InitTransferRequest{
-            Address: reducerAddress,
-            Filename: fileName,
-        }
-
-        fileResp := types.InitTransferResponse{}
-
-        err = client.Call("WorkerAPI.InitiateFileTransfer", fileReq, &fileResp)
-        if err != nil {
-            return nil, err
-        }
-
-        client.Close()
     }
     
     newReduce := types.ReduceTask{
@@ -166,7 +148,9 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
                 So we give up to let a different worker reattempt */
             return nil
         }
+
         c.pendingReduceTasks++
+
         resp.TaskR = newReduce
         fmt.Println("successfully assigned reduce task from coord")
     }
@@ -192,18 +176,81 @@ func (c *CoordinatorAPI) ReportMapDone(req types.MapDoneRequest, resp *types.Map
     return nil
 }
 
+func (c *CoordinatorAPI) SortWorkersByLeastReplications() []string {
+    workers := []string{}
+    for k := range c.heartbeatStamp {
+        /* Loop through every alive worker */
+        workers = append(workers, k)
+    }
+
+    sort.Slice(workers, func(i, j int) bool {
+        return len(c.replicaTracker[workers[i]]) < len(c.replicaTracker[workers[j]])
+    })
+
+    return workers
+}
+
+func initTransfer(sender string, reciever string, file string) error {
+    address := fmt.Sprintf("rpc-%s:2001", sender)
+    client, err := rpc.Dial("tcp", address)
+    if err != nil {
+        return err
+    }
+
+    reducerAddress := fmt.Sprintf("rpc-%s:2001", reciever)
+    fileReq := types.InitTransferRequest{
+        Address: reducerAddress,
+        Filename: file,
+    }
+
+    fileResp := types.InitTransferResponse{}
+
+    err = client.Call("WorkerAPI.InitiateFileTransfer", fileReq, &fileResp)
+    client.Close()
+    return err
+}
+
+func (c *CoordinatorAPI) InitiateReplicas(workerId string, outputFile string) {
+
+    c.replicaTracker[workerId] = append(c.replicaTracker[workerId], outputFile)
+
+    workers := c.SortWorkersByLeastReplications()
+
+    neededReplicas := replicaNum - 1
+
+    for _, worker := range workers{
+        if worker == workerId {
+            continue
+        } else if neededReplicas <= 0 {
+            break
+        }
+
+        err := initTransfer(workerId, worker, outputFile)
+
+        if err != nil {
+            continue
+        }
+
+        neededReplicas--
+
+    }
+}
+
 func (c *CoordinatorAPI) ReportReduceDone(req types.ReduceDoneRequest, resp *types.ReduceDoneResponse) error {
     c.mu.Lock()
     defer c.mu.Unlock()
+
+    c.InitiateReplicas(req.WorkerId, req.OutputFile)
     
     c.pendingReduceTasks--
     fmt.Printf("%s: finished their reduce step", req.WorkerId)
-    /* Initiate replication of output files here */
     return nil
 }
 
 func (c *CoordinatorAPI) RedoMapTasks(workerId string) {
     mapTasks := c.mapWorkers[workerId]
+    delete(c.mapWorkers, workerId)
+    delete(c.heartbeatStamp, workerId)
 
     for _, task := range mapTasks{
         for _, url := range task.Urls{
@@ -211,6 +258,42 @@ func (c *CoordinatorAPI) RedoMapTasks(workerId string) {
             c.urlQueue = append([]string{url}, c.urlQueue...)
         }
     }
+}
+
+func (c *CoordinatorAPI) ReReplicateOutputs(workerId string) {
+    outputs := c.replicaTracker[workerId]
+
+    for _, output := range outputs {
+        workers := c.SortWorkersByLeastReplications()
+        for _, worker := range workers {
+            /* First check if this worker already owns a replica */
+            replicas := c.replicaTracker[worker]
+
+            found := false
+            for _, replica := range replicas{
+                if replica == output{
+                    found = true
+                }
+            }
+
+            if found {
+                /* We want to spread out replicas, so we'll attempt to 
+                    create a replica in a different worker */
+                continue
+            }
+
+            /* We found a good worker to own the replica,
+                so we attempt to transfer the replica */
+            err := initTransfer(workerId, worker, output)
+            if err != nil {
+                continue
+            } else {
+                break
+            }
+        }
+    }
+    
+    delete(c.replicaTracker, workerId)
 }
 
 func (c *CoordinatorAPI) RecieveHeartbeat(req types.HeartbeatRequest, resp *types.HeartbeatResponse) error {
@@ -225,6 +308,7 @@ func (c *CoordinatorAPI) RecieveHeartbeat(req types.HeartbeatRequest, resp *type
         if heartbeatAge >= heartbeatExpire {
             /* worker is dead */
             c.RedoMapTasks(req.WorkerId)
+            c.ReReplicateOutputs(req.WorkerId)
         }
         c.mu.Unlock()
     })
@@ -253,6 +337,7 @@ func main() {
         mapWorkers: make(map[string][]types.MapTask),
         reduceQueue: make([]int, 0),
         heartbeatStamp: make(map[string]time.Time),
+        replicaTracker: make(map[string][]string),
     }
 
     for i := 0; i < reduceCount; i++ {
