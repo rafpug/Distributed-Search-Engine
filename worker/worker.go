@@ -274,11 +274,12 @@ func reduceData(resp *types.ReduceTask) {
 	saveIndex(fileName, output)
 }
 
-func reduceDone(client *rpc.Client, workerId string, outId int) {
+func reduceDone(client *rpc.Client, workerId string, outId int,) {
 	outFile := fmt.Sprintf("output-%d", outId)
 	doneReq := types.ReduceDoneRequest{
 		WorkerId: workerId,
 		OutputFile: outFile,
+		ReduceId: outId,
 	}
 	doneResp := types.ReduceDoneResponse{
 		Ok: true,
@@ -314,6 +315,7 @@ func mapData(client *rpc.Client, resp types.TaskResponse) {
 
 	doneReq := types.MapDoneRequest{
 		Urls: result,
+		MapId: resp.TaskM.Id,
 	}
 	doneResp := types.MapDoneResponse{}
 	

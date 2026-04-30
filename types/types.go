@@ -8,6 +8,7 @@ type MapTask struct {
 	R int // Number of reduce tasks
 	Urls []string // Batch of URLs to crawl
 	IntermFiles []string // Names of expected intermediate files
+	Id int
 }
 
 type ReduceTask struct {
@@ -25,6 +26,7 @@ type TaskResponse struct {
 
 type MapDoneRequest struct {
 	Urls map[string]bool
+	MapId int
 }
 
 type MapDoneResponse struct {
@@ -34,6 +36,7 @@ type MapDoneResponse struct {
 type ReduceDoneRequest struct {
 	WorkerId string
 	OutputFile string
+	ReduceId int
 }
 
 type ReduceDoneResponse struct {
