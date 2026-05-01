@@ -6,10 +6,19 @@ services:
       dockerfile: dockerfile.coordinator
     container_name: rpc-coordinator
     ports:
-      - "3002:3001"
+      - "3003:3001"
 
   worker-image:
     image: rpc-worker:latest
     build:
       context: .
       dockerfile: dockerfile.worker
+
+  client:
+    image: rpc-client:latest
+    build:
+      context: .
+      dockerfile: dockerfile.client
+    container_name: rpc-client
+    ports:
+      - "3002:3001"
