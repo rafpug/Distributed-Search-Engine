@@ -190,6 +190,9 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
         if err != nil {
             /* The file transfer to the reducing worker failed
                 So we give up to let a different worker reattempt */
+                c.mu.Unlock()
+                time.Sleep(100 * time.Millisecond)
+                c.mu.Lock()
             return nil
         }
         resp.TaskR = newReduce
