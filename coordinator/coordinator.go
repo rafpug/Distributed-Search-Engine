@@ -13,7 +13,7 @@ import (
 const reduceCount = 4
 
 const B = 100
-const maxUrls = 100000
+const maxUrls = 10000
 
 /* Amount of seconds until a worker is considered dead */
 const heartbeatExpire = 20 * time.Second
@@ -30,10 +30,10 @@ type CoordinatorAPI struct {
 
     /* Keeps a map of workers to their jobs for tracking completion */
     mapWorkers map[string][]types.MapTask
-    mapCompletion map[int]bool
+    mapIncompletion map[int]bool
 
     reduceQueue []int
-    reduceCompletion map[int]bool
+    reduceIncompletion map[int]bool
 
     /* Maps workers to the timestamp of their last heartbeat */
     heartbeatStamp map[string]time.Time
@@ -72,7 +72,7 @@ func CreateMapTask( c *CoordinatorAPI, workerId string) types.MapTask {
     newMap.Id = c.taskNumber
 
     c.mapWorkers[workerId] = append(c.mapWorkers[workerId], newMap)
-    c.mapCompletion[c.taskNumber] = false
+    c.mapIncompletion[c.taskNumber] = true
     c.taskNumber++
 
     return newMap
@@ -106,14 +106,14 @@ func CreateReduceTask(c *CoordinatorAPI, workerId string) (*types.ReduceTask, er
     }
 
 
-    c.reduceCompletion[reduceId] = false
+    c.reduceIncompletion[reduceId] = true
     c.reduceQueue = c.reduceQueue[1:]
     return &newReduce, nil
 }
 
 func checkCompletion(dict map[int]bool) bool {
     for _, value := range dict {
-        if !value {
+        if value {
             return false
         }
     }
@@ -142,23 +142,18 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
                 }
 
                 oldTask.IntermFiles = intermFiles
-                c.mapCompletion[oldTask.Id] = false
+                c.mapIncompletion[oldTask.Id] = true
+                c.mapWorkers[req.WorkerId] = append(c.mapWorkers[req.WorkerId], oldTask)
                 resp.TaskM = &oldTask
 
-                time.AfterFunc(10*time.Second, func() {
-                    c.mu.Lock()
-                    defer c.mu.Unlock()
-                    if !c.mapCompletion[oldTask.Id] {
-                        c.RemapQueue = append(c.RemapQueue, oldTask)
-                    }
-                    delete(c.mapCompletion, oldTask.Id)
-                })
                 c.RemapQueue = c.RemapQueue[1:]
+                fmt.Printf("REASSIGN MAP TASK %d TO %s\n", oldTask.Id, req.WorkerId)
                 return nil
             }
 
-            if checkCompletion(c.mapCompletion) {
+            if checkCompletion(c.mapIncompletion) {
                 /* No more map tasks */
+                fmt.Printf("# of searched: %d", len(c.searchedURLS))
                 break
             }
             c.mu.Unlock()
@@ -171,16 +166,9 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
         newMap := CreateMapTask(c, req.WorkerId)
         resp.TaskM = &newMap
 
-        time.AfterFunc(10*time.Second, func() {
-            c.mu.Lock()
-            defer c.mu.Unlock()
-            if !c.mapCompletion[newMap.Id] {
-                c.RemapQueue = append(c.RemapQueue, newMap)
-            }
-            delete(c.mapCompletion, newMap.Id)
-        })
 
-        fmt.Printf("ASSIGN MAP TASK TO %s\n", req.WorkerId)
+
+        fmt.Printf("ASSIGN MAP TASK %d TO %s\n", newMap.Id, req.WorkerId)
         return nil
     }
 
@@ -189,7 +177,7 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
 
     /* Attempt to assign a reduce task */
     if len(c.reduceQueue) == 0 {
-        if checkCompletion(c.reduceCompletion) {
+        if checkCompletion(c.reduceIncompletion) {
             // fmt.Println("SUCCESS")
             // resp.Done = true
         }
@@ -207,16 +195,7 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
         }
         resp.TaskR = newReduce
 
-        time.AfterFunc(10*time.Second, func(){
-            c.mu.Lock()
-            defer c.mu.Unlock()
-            if !c.reduceCompletion[newReduce.ReduceId]{
-                c.reduceQueue = append(c.reduceQueue, newReduce.ReduceId)
-            }
-            delete(c.reduceCompletion, newReduce.ReduceId)
-        })
-
-        fmt.Printf("ASSIGN REDUCE TASK TO %s\n", req.WorkerId)
+        fmt.Printf("ASSIGN REDUCE TASK %d TO %s\n",newReduce.ReduceId, req.WorkerId)
     }
     return nil
 }
@@ -230,12 +209,11 @@ func (c *CoordinatorAPI) ReportMapDone(req types.MapDoneRequest, resp *types.Map
             continue
         } else {
             c.urlQueue = append(c.urlQueue, k)
-            c.searchedURLS[k] = true
         }
     }
 
-    c.mapCompletion[req.MapId] = true
-    fmt.Printf("GET MAP TASK RESULT\n")
+    delete(c.mapIncompletion, req.MapId)
+    fmt.Printf("GET MAP TASK %d RESULT\n", req.MapId)
     resp.Ok = true
     return nil
 }
@@ -306,12 +284,12 @@ func (c *CoordinatorAPI) InitiateReplicas(workerId string, outputFile string) {
 }
 
 func (c *CoordinatorAPI) ReportReduceDone(req types.ReduceDoneRequest, resp *types.ReduceDoneResponse) error {
-    c.mu.Lock()
-    defer c.mu.Unlock()
 
     c.InitiateReplicas(req.WorkerId, req.OutputFile)
     
-    c.reduceCompletion[req.ReduceId] = true
+    c.mu.Lock()
+    delete(c.reduceIncompletion, req.ReduceId)
+    c.mu.Unlock()
     fmt.Printf("%s: finished their reduce step\n", req.WorkerId)
     return nil
 }
@@ -325,6 +303,9 @@ func (c *CoordinatorAPI) RedoMapTasks(workerId string) {
 
     for _, task := range mapTasks{
         c.RemapQueue = append(c.RemapQueue, task)
+        if c.mapIncompletion[task.Id]{
+            delete(c.mapIncompletion, task.Id)
+        }
     }
 }
 
@@ -410,8 +391,8 @@ func main() {
         RemapQueue: []types.MapTask{},
         mapWorkers: make(map[string][]types.MapTask),
         reduceQueue: make([]int, 0),
-        mapCompletion: make(map[int]bool),
-        reduceCompletion: make(map[int]bool),
+        mapIncompletion: make(map[int]bool),
+        reduceIncompletion: make(map[int]bool),
         heartbeatStamp: make(map[string]time.Time),
         replicaTracker: make(map[string][]string),
         taskNumber: 0,
