@@ -348,7 +348,7 @@ func generateHeartbeats(client *rpc.Client, workerId string){
 	}
 }
 
-func (w *WorkerAPI) ServeQuery(req types.SearchRequest, resp types.SearchResponse) error {
+func (w *WorkerAPI) ServeQuery(req types.SearchRequest, resp *types.SearchResponse) error {
 	index, err := loadIndex(req.OutputFile)
 	
 	if err != nil {
