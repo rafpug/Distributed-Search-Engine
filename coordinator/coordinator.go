@@ -14,7 +14,7 @@ import (
 const reduceCount = 4
 
 const B = 100
-const maxUrls = 1000
+const maxUrls = 10000
 
 /* Amount of seconds until a worker is considered dead */
 const heartbeatExpire = 20 * time.Second

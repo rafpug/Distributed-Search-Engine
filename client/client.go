@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var p = 1
+var p = 100
 var requestNum = 1000
 var wg = sync.WaitGroup{}
 var mu = sync.Mutex{}
@@ -23,8 +23,17 @@ var words []string
 var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func loadWords() {
-	data, _ := wordsFile.ReadFile("words_alpha.txt")
-	words = strings.Split(string(data), "\n")
+	data, err := wordsFile.ReadFile("words_alpha.txt")
+	if err != nil {
+		panic(err)
+	}
+
+	for _, w := range strings.Split(string(data), "\n") {
+		w = strings.TrimSpace(strings.ToLower(w))
+		if w != "" {
+			words = append(words, w)
+		}
+	}
 }
 
 func randomWord() string {
@@ -59,19 +68,21 @@ func queryServer(client *rpc.Client, keyword string){
 	if queryErr != nil {
 		panic(queryErr)
 	}
-	
+	fmt.Println("searching:", keyword)
 	fmt.Println(queryResp)
 }
 
 
 func queryThread(client *rpc.Client) {
 	for {
-		if requestNum <= 0 {
-			break
-		}
 		mu.Lock()
-		requestNum--
-		mu.Unlock()
+		if requestNum <= 0 {
+			mu.Unlock()
+			break
+		} else {
+			requestNum--
+			mu.Unlock()
+		}
 
 		keyword := randomWord()
 
@@ -82,7 +93,7 @@ func queryThread(client *rpc.Client) {
 
 func main(){
 	loadWords()
-	
+
 	client, err := rpc.Dial("tcp", "coordinator:3001") 
 	if err != nil {
 		panic(err)
