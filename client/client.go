@@ -1,5 +1,100 @@
 package main
 
-func main(){
+import (
+	"net/rpc"
+	"sync"
+	"embed"
+	"fmt"
+	"strings"
+	"time"
+	"math/rand"
+	"distributed_search_engine/types"
+)
 
+var p = 1
+var requestNum = 1000
+var wg = sync.WaitGroup{}
+var mu = sync.Mutex{}
+
+//go:embed words_alpha.txt
+var wordsFile embed.FS
+
+var words []string
+var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func loadWords() {
+	data, _ := wordsFile.ReadFile("words.txt")
+	words = strings.Split(string(data), "\n")
+}
+
+func randomWord() string {
+	return words[rng.Intn(len(words))]
+}
+
+func queryServer(client *rpc.Client, keyword string){
+	req := types.RedirectRequest{
+		Keyword: keyword,
+	}
+
+	resp := types.RedirectResponse{}
+
+	err := client.Call("CoordinatorAPI.RedirectClient", req, &resp)
+	if err != nil {
+		panic(err)
+	}
+
+	queryReq := types.SearchRequest{
+		Keyword: keyword,
+		OutputFile: resp.OutputFile,
+	}
+
+	queryResp := types.SearchResponse{}
+
+	worker, err := rpc.Dial("tcp", resp.Address)
+	if err != nil {
+		panic(err)
+	}
+
+	queryErr := worker.Call("WorkerAPI.ServeQuery", queryReq, &queryResp)
+	if queryErr != nil {
+		panic(queryErr)
+	}
+	
+	fmt.Println(queryResp)
+}
+
+
+func queryThread(client *rpc.Client) {
+	for {
+		if requestNum <= 0 {
+			break
+		}
+		mu.Lock()
+		requestNum--
+		mu.Unlock()
+
+		keyword := randomWord()
+
+		queryServer(client, keyword)
+	}
+	wg.Done()
+}
+
+func main(){
+	client, err := rpc.Dial("tcp", "coordinator:3001") 
+	if err != nil {
+		panic(err)
+	}
+
+	start := time.Now()
+
+	/* Spawn in the threads */
+	for i := 0; i < p; i++ {
+		wg.Add(1)
+		go queryThread(client)
+	}
+	wg.Wait()
+
+	elapsed := time.Since(start)
+	fmt.Println("All queries satsified in ", elapsed)
 }
