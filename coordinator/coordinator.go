@@ -153,7 +153,6 @@ func (c *CoordinatorAPI) GetJob(req types.TaskRequest, resp *types.TaskResponse)
 
             if checkCompletion(c.mapIncompletion) {
                 /* No more map tasks */
-                fmt.Printf("# of searched: %d", len(c.searchedURLS))
                 break
             }
             c.mu.Unlock()

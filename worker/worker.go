@@ -12,12 +12,17 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/html"
 )
 
 const heartbeatTime = 10 * time.Second
+
+var lock = sync.Mutex{}
+
+var wg = sync.WaitGroup{}
 
 type ReverseIndex map[string]map[string]bool
 
@@ -72,11 +77,13 @@ func processHTML(baseURL string, n *html.Node, indexes []ReverseIndex, result ma
 		text := strings.TrimSpace(n.Data)
 		if text != "" {
 			for _, word := range tokenize(text) {
+				lock.Lock()
 				hash := mrHash(word, len(indexes))
 				if indexes[hash][word] == nil {
 					indexes[hash][word] = make(map[string]bool)
 				}
 				indexes[hash][word][baseURL] = true
+				lock.Unlock()
 			}
 		}
 	}
@@ -98,7 +105,9 @@ func processHTML(baseURL string, n *html.Node, indexes []ReverseIndex, result ma
 					continue
 				}
 
+				lock.Lock()
 				result[url] = true
+				lock.Unlock()
 			}
 		}
 	}
@@ -109,6 +118,7 @@ func processHTML(baseURL string, n *html.Node, indexes []ReverseIndex, result ma
 }
 
 func fetch(url string, indexes []ReverseIndex, result map[string]bool) error {
+	defer wg.Done()
 	client := &http.Client{
 		Timeout: 15 * time.Second,
 	}
@@ -303,11 +313,10 @@ func mapData(client *rpc.Client, resp types.TaskResponse) {
 
 	urls := resp.TaskM.Urls
 	for _, v := range urls {
-		err := fetch(v, indexes, result)
-		if err != nil {
-			// fmt.Println("URL: ", v, " ", err)
-		}
+		wg.Add(1)
+		go fetch(v, indexes, result)		
 	}
+	wg.Wait()
 
 	for i := range indexes{
 		appendIndex(resp.TaskM.IntermFiles[i], indexes[i])
