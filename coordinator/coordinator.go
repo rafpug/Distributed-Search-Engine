@@ -3,6 +3,7 @@ package main
 import (
 	"distributed_search_engine/types"
 	"fmt"
+	"hash/fnv"
 	"net"
 	"net/rpc"
 	"sort"
@@ -292,7 +293,6 @@ func (c *CoordinatorAPI) ReportReduceDone(req types.ReduceDoneRequest, resp *typ
     c.mu.Lock()
     delete(c.reduceIncompletion, req.ReduceId)
     c.mu.Unlock()
-    fmt.Printf("%s: finished their reduce step\n", req.WorkerId)
     return nil
 }
 
@@ -366,17 +366,40 @@ func (c *CoordinatorAPI) RecieveHeartbeat(req types.HeartbeatRequest, resp *type
                 /* worker is dead */
                 fmt.Printf("HEARTBEAT FAILED FROM %s\n", workerId)
                 c.RedoMapTasks(workerId)
-                fmt.Println("Finished redoing maptasks")
                 c.ReReplicateOutputs(workerId)
-                fmt.Println("Finished rereplicating")
             }
         }
     })
 
     resp.Ok = true
-    fmt.Printf("Recieved Heartbeat from: %s\n", req.WorkerId)
     return nil
 }
+
+func mrHash(key string, r int) int {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return int(h.Sum32() & 0x7fffffff) % r
+}
+
+func (c *CoordinatorAPI) RedirectClient(req types.SearchRequest, resp *types.RedirectResponse) error {
+
+    outputId := mrHash(req.Keyword, reduceCount)
+    outputName := fmt.Sprintf("output-%d", outputId)
+
+    for worker, outputs := range c.replicaTracker {
+        for _, output := range outputs {
+            if outputName == output {
+                workerAddress := fmt.Sprintf("rpc-%s:2001", worker)
+                resp.Address = workerAddress
+                return nil
+            }
+        }
+    }
+
+    return nil
+}
+
+
 
 func main() {
     coordAPI := &CoordinatorAPI{
@@ -413,7 +436,6 @@ func main() {
     defer listener.Close()
 
     fmt.Printf("Coordinator listening\n")
-    // fmt.Printf("Reduce allocations: %v\n", allocs)
 
     for {
         conn, err := listener.Accept()

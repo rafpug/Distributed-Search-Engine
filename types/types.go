@@ -68,3 +68,15 @@ type HeartbeatRequest struct {
 type HeartbeatResponse struct {
 	Ok bool
 }
+
+type SearchRequest struct {
+	Keyword string
+}
+
+type RedirectResponse struct {
+	Address string
+}
+
+type SearchResponse struct {
+	Urls []string
+}
