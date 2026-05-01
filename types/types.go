@@ -69,12 +69,18 @@ type HeartbeatResponse struct {
 	Ok bool
 }
 
-type SearchRequest struct {
+type RedirectRequest struct {
 	Keyword string
 }
 
 type RedirectResponse struct {
 	Address string
+	OutputFile string
+}
+
+type SearchRequest struct {
+	Keyword string
+	OutputFile string
 }
 
 type SearchResponse struct {

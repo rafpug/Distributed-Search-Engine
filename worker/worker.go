@@ -348,6 +348,20 @@ func generateHeartbeats(client *rpc.Client, workerId string){
 	}
 }
 
+func (w *WorkerAPI) ServeQuery(req types.SearchRequest, resp types.SearchResponse) error {
+	index, err := loadIndex(req.OutputFile)
+	
+	if err != nil {
+		return err
+	} else {
+		urls := index[req.Keyword]
+		for url := range urls {
+			resp.Urls = append(resp.Urls, url)
+		}
+		return nil
+	}
+}
+
 func main() {
 	myName := os.Args[1]
 

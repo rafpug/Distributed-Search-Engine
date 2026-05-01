@@ -381,7 +381,7 @@ func mrHash(key string, r int) int {
 	return int(h.Sum32() & 0x7fffffff) % r
 }
 
-func (c *CoordinatorAPI) RedirectClient(req types.SearchRequest, resp *types.RedirectResponse) error {
+func (c *CoordinatorAPI) RedirectClient(req types.RedirectRequest, resp *types.RedirectResponse) error {
 
     outputId := mrHash(req.Keyword, reduceCount)
     outputName := fmt.Sprintf("output-%d", outputId)
@@ -391,6 +391,7 @@ func (c *CoordinatorAPI) RedirectClient(req types.SearchRequest, resp *types.Red
             if outputName == output {
                 workerAddress := fmt.Sprintf("rpc-%s:2001", worker)
                 resp.Address = workerAddress
+                resp.OutputFile = outputName
                 return nil
             }
         }
