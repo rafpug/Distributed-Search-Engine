@@ -63,6 +63,7 @@ func queryServer(client *rpc.Client, keyword string){
 	if err != nil {
 		panic(err)
 	}
+	defer worker.Close()
 
 	queryErr := worker.Call("WorkerAPI.ServeQuery", queryReq, &queryResp)
 	if queryErr != nil {
@@ -98,6 +99,7 @@ func main(){
 	if err != nil {
 		panic(err)
 	}
+	defer client.Close()
 
 	start := time.Now()
 
